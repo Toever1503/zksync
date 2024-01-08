@@ -1,11 +1,11 @@
 require('dotenv').config()
-const zksync = require('zksync');
+const zksync = require('zksync-ethers');
+const ethers = require("ethers");
 
-
-async function getZkSyncProvider(zksync, networkName) {
+async function getZkSyncProvider(rpc) {
   let zkSyncProvider
   try {
-    zkSyncProvider = await zksync.getDefaultProvider(networkName)
+    zkSyncProvider = new zksync.Provider(rpc);
   } catch (error) {
     console.log('Unable to connect to zkSync.')
     console.log(error)
@@ -13,7 +13,7 @@ async function getZkSyncProvider(zksync, networkName) {
   return zkSyncProvider
 }
 
-async function getEthereumProvider(ethers, networkName) {
+async function getEthereumProvider(networkName) {
   let ethersProvider
   try {
     // eslint-disable-next-line new-cap
@@ -25,29 +25,18 @@ async function getEthereumProvider(ethers, networkName) {
   return ethersProvider
 }
 
-async function initAccount(rinkebyWallet, zkSyncProvider, zksync) {
-  const zkSyncWallet = await zksync.Wallet.fromEthSigner(rinkebyWallet, zkSyncProvider)
+async function initAccount(etherWallet, zkSyncProvider, ethersProvider) {
+  const zkSyncWallet = new zksync.Wallet(etherWallet, zkSyncProvider, ethersProvider)
   return zkSyncWallet
 }
 
-async function registerAccount(wallet) {
-  console.log(`Registering the ${wallet.address()} account on zkSync`)
-  if (!await wallet.isSigningKeySet()) {
-    if (await wallet.getAccountId() === undefined) {
-      throw new Error('Unknown account')
-    }
-    const changePubkey = await wallet.setSigningKey()
-    await changePubkey.awaitReceipt()
-  }
-  console.log(`Account ${wallet.address()} registered`)
-}
 
 async function depositToZkSync(zkSyncWallet, token, amountToDeposit, ethers) {
-  const deposit = await zkSyncWallet.depositToSyncFromEthereum({
+  const deposit = await zkSyncWallet.deposit({
     depositTo: zkSyncWallet.address(),
     token: token,
     amount: ethers.utils.parseEther(amountToDeposit)
-  })
+  });
   try {
     await deposit.awaitReceipt()
   } catch (error) {
@@ -94,6 +83,7 @@ async function withdrawToEthereum(wallet, amountToWithdraw, withdrawalFee, token
 async function displayZkSyncBalance(wallet, ethers) {
   const state = await wallet.getAccountState()
 
+  console.log("token balance: ", state.committed.balances);
   if (state.committed.balances.ETH) {
     console.log(`Commited ETH balance for ${wallet.address()}: ${ethers.utils.formatEther(state.committed.balances.ETH)}`)
   } else {
@@ -111,7 +101,6 @@ module.exports = {
   getZkSyncProvider,
   getEthereumProvider,
   depositToZkSync,
-  registerAccount,
   displayZkSyncBalance,
   transfer,
   withdrawToEthereum,
